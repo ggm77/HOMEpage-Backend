@@ -46,8 +46,6 @@ class TokenData(BaseModel):
 class User(BaseModel):
     userType: str
     username: str
-    email: str
-    profilePicture: Union[str, None] = None
     disabled: bool
 
 
@@ -160,8 +158,8 @@ async def get_current_active_user(
 # user1:2345
 
 # userType = admin or user / username = nickname / hashed_password / email = email address / profilePicture = user profile picture 
-userInfo = {"admin":{"userType":"admin", "username":"admin", "hashed_password":"$2b$12$aj5Mota/zxmx6xfqNVoyJ.JMwcQmCAF66Ssq38f2MAJR7WEZbIiD2","email":"email1111@aaaaaa.com", "profilePicture":"admin.png", "disabled":False},
-            "user1":{"userType":"user", "username":"user1",  "hashed_password":"$2b$12$F6/eL2Zl7.frOfEImIZuAeNZx9aap.nqBC1JM/2GtHhU7e9ap4PJa","email":"email2222@bbbbbb.com", "profilePicture":"user1.png", "disabled":False}
+userInfo = {"admin":{"userType":"admin", "username":"admin", "hashed_password":"$2b$12$aj5Mota/zxmx6xfqNVoyJ.JMwcQmCAF66Ssq38f2MAJR7WEZbIiD2", "disabled":False},
+            "user1":{"userType":"user", "username":"user1",  "hashed_password":"$2b$12$F6/eL2Zl7.frOfEImIZuAeNZx9aap.nqBC1JM/2GtHhU7e9ap4PJa", "disabled":False}
         }
 #------#
 
@@ -188,7 +186,7 @@ async def login_for_access_token(
 
 
 
-@app.get("/users/me/", response_model=User)
+@app.post("/userinfo", response_model=User)
 async def read_users_me(
     current_user: User = Depends(get_current_active_user)
 ):
