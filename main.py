@@ -16,18 +16,9 @@ from pydantic import BaseModel
 from collections import OrderedDict
 import os
 import json
-
-
+#database
 from database import engineconn
 from models import DBtable
-
-
-
-
-
-
-
-
 
 
 #--- JWT setting ---#
@@ -38,8 +29,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SECRET_FILE = os.path.join(BASE_DIR, "secrets.json")
 secrets = json.loads(open(SECRET_FILE).read())
 
-
-#SECRET_KEY = "b4f3cf0760c8c0438d11b459a1380bc3c5a9e2d05085edad3bbe4c2d273f05e4" #must change befor live service
 SECRET_KEY = secrets["server"]["SECRET_KEY"]
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -103,8 +92,12 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 def get_user(db, username: str): #use mysql
-    information = session.query(db).get(username)
-    if information != "null": # Is it ok?
+    try:
+        information = session.query(db).get(username)
+    except:
+        print(f"[{datetime.utcnow()}] DATABASE DOWN")
+        return 
+    if information != None: # Is it ok?
         user_dict = {
             "userType":information.userType,
             "username":information.username,
@@ -113,12 +106,16 @@ def get_user(db, username: str): #use mysql
             }
         return UserInDB(**user_dict)
         #return UserInDB(user_dict)
+    else:
+        return
     
-def authenticate_user(userInfo, username: str, password: str):
-    user = get_user(userInfo, username)
+def authenticate_user(db, username: str, password: str):
+    user = get_user(db, username)
     if not user:
+        print(f"[{datetime.utcnow()}] \"{username}\" is not exist in database.")
         return False
     if not verify_password(password, user.hashed_password):
+        print(f"[{datetime.utcnow()}] \"{username}\" password not correct.")
         return False
     return user
 
@@ -175,6 +172,12 @@ async def get_current_active_user(
 mysql
 homeHomepageDB
 table : userInfo
+
+
+mysql -u root -p
+
+mysql.server start
+mysql.server stop
 """
 
 #DBtable is database.
@@ -202,7 +205,7 @@ async def login_for_access_token(
 ):
     user = authenticate_user(DBtable, form_data.username, form_data.password)
     if not user:
-        raise HTTPException(
+        raise HTTPException(#raise login failed alert
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
@@ -212,8 +215,8 @@ async def login_for_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     print(f"[{datetime.utcnow()}] \"{form_data.username}\" get access token")
-    # print(form_data.username, form_data.password) #for test
-    # print(f"[{datetime.utcnow()}]\n",{"access_token": access_token, "token_type": "bearer"}) #for test
+    #print(form_data.username, form_data.password) #for test
+    #print(f"[{datetime.utcnow()}]\n",{"access_token": access_token, "token_type": "bearer"}) #for test
 
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -227,7 +230,7 @@ async def read_users_me(
 
 
 #mysql test
-@app.get("/")
-async def first_get():
-    example = session.query(DBtable).get("admin")
-    return example
+# @app.get("/")
+# async def first_get():
+#     example = session.query(DBtable).get("admin")
+#     return example
