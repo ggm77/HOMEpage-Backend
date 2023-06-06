@@ -10,15 +10,21 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import timedelta, datetime
 from pydantic import BaseModel
 from collections import OrderedDict
+import os
 import json
 
 
-#added
-from fastapi.middleware.cors import CORSMiddleware
-##
+from database import engineconn
+from models import DBtable
+
+
+
+
+
 
 
 
@@ -27,8 +33,14 @@ from fastapi.middleware.cors import CORSMiddleware
 #--- JWT setting ---#
 # to get a string like this run:
 # openssl rand -hex 32
-#must change befor live service
-SECRET_KEY = "b4f3cf0760c8c0438d11b459a1380bc3c5a9e2d05085edad3bbe4c2d273f05e4" #must change befor live service
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SECRET_FILE = os.path.join(BASE_DIR, "secrets.json")
+secrets = json.loads(open(SECRET_FILE).read())
+
+
+#SECRET_KEY = "b4f3cf0760c8c0438d11b459a1380bc3c5a9e2d05085edad3bbe4c2d273f05e4" #must change befor live service
+SECRET_KEY = secrets["server"]["SECRET_KEY"]
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -66,7 +78,7 @@ app = FastAPI()
 
 
 
-#added
+
 origins = [
     "http://localhost:3000",
     "localhost:3000"
@@ -82,8 +94,6 @@ app.add_middleware(
     expose_headers=["*","Authorization"],
 )
 
-##
-
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -92,10 +102,17 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
+def get_user(db, username: str): #use mysql
+    information = session.query(db).get(username)
+    if information != "null": # Is it ok?
+        user_dict = {
+            "userType":information.userType,
+            "username":information.username,
+            "hashed_password":information.hashed_password,
+            "disabled" : information.disabled
+            }
         return UserInDB(**user_dict)
+        #return UserInDB(user_dict)
     
 def authenticate_user(userInfo, username: str, password: str):
     user = get_user(userInfo, username)
@@ -131,7 +148,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = get_user(userInfo, username=token_data.username)#changed
+    user = get_user(DBtable, username=token_data.username)#changed
     if user is None:
         raise credentials_exception
     return user
@@ -154,13 +171,28 @@ async def get_current_active_user(
 
 #---database---#
 
-# user1 is test account
-# user1:2345
+"""
+mysql
+homeHomepageDB
+table : userInfo
+"""
 
-# userType = admin or user / username = nickname / hashed_password / email = email address / profilePicture = user profile picture 
-userInfo = {"admin":{"userType":"admin", "username":"admin", "hashed_password":"$2b$12$aj5Mota/zxmx6xfqNVoyJ.JMwcQmCAF66Ssq38f2MAJR7WEZbIiD2", "disabled":False},
-            "user1":{"userType":"user", "username":"user1",  "hashed_password":"$2b$12$F6/eL2Zl7.frOfEImIZuAeNZx9aap.nqBC1JM/2GtHhU7e9ap4PJa", "disabled":False}
-        }
+#DBtable is database.
+
+engine = engineconn()
+session = engine.sessionmaker()
+
+class Item(BaseModel):
+    username: str
+    hashed_password: str
+    userType: str
+    disabled: bool
+
+
+
+
+
+# user:2345
 #------#
 
 #token
@@ -168,7 +200,7 @@ userInfo = {"admin":{"userType":"admin", "username":"admin", "hashed_password":"
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
-    user = authenticate_user(userInfo, form_data.username, form_data.password)
+    user = authenticate_user(DBtable, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -179,8 +211,9 @@ async def login_for_access_token(
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    print(form_data.username, form_data.password)
-    print(f"[{datetime.utcnow()}]\n",{"access_token": access_token, "token_type": "bearer"})
+    print(f"[{datetime.utcnow()}] \"{form_data.username}\" get access token")
+    # print(form_data.username, form_data.password) #for test
+    # print(f"[{datetime.utcnow()}]\n",{"access_token": access_token, "token_type": "bearer"}) #for test
 
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -191,3 +224,10 @@ async def read_users_me(
     current_user: User = Depends(get_current_active_user)
 ):
     return current_user
+
+
+#mysql test
+@app.get("/")
+async def first_get():
+    example = session.query(DBtable).get("admin")
+    return example
