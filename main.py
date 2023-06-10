@@ -30,16 +30,14 @@ secrets = json.loads(open(SECRET_FILE).read())
 SECRET_KEY = secrets["server"]["SECRET_KEY"]
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 0.25
+REFRESH_TOKEN_EXPIRE_DAYS = 1
 
 
 
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-
-class TokenData(BaseModel):
-    username: Union[str, None] = None
+    refresh_token: str
 
 
 class User(BaseModel):
@@ -129,6 +127,41 @@ def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def create_refresh_token(data: dict, expires_delta: Union[timedelta, None] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=1)
+    to_encode.update({"refresh":"token", "exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def authenticate_refresh_token(token: str ):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        #headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("refresh") != "token":
+            raise credentials_exception
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        exp: str = payload.get("exp")
+        if exp is None:
+            raise credentials_exception
+        # elif datetime.utcnow() - exp > 0:
+        #     raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = get_user(DBtable, username=username)
+    if user is None:
+        raise credentials_exception
+    return user
+
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -141,10 +174,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = get_user(DBtable, username=token_data.username)#changed
+    user = get_user(DBtable, username=username)
     if user is None:
         raise credentials_exception
     return user
@@ -201,7 +233,7 @@ class Item(BaseModel):
 
 #token
 @app.post("/token", response_model=Token)
-async def login_for_access_token(
+async def response_access_token(
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
     user = authenticate_user(DBtable, form_data.username, form_data.password)
@@ -215,11 +247,38 @@ async def login_for_access_token(
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_token = create_refresh_token(
+        data={"sub": user.username}, expires_delta=refresh_token_expires
+    )
     print(f"[{datetime.utcnow()}] \"{form_data.username}\" get access token")
     #print(form_data.username, form_data.password) #for test
     #print(f"[{datetime.utcnow()}]\n",{"access_token": access_token, "token_type": "bearer"}) #for test
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
+
+@app.post("/refreshToken")#, response_model=Token)
+async def response_refresh_token(refresh_token: str=Form(...)):
+    user = authenticate_refresh_token(refresh_token)
+    if not user:
+        raise HTTPException(#raise login failed alert
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_token = create_refresh_token(
+        data={"sub": user.username}, expires_delta=refresh_token_expires
+    )
+    print(f"[{datetime.utcnow()}] \"{user.username}\" get access token")
+
+    return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
+
+    
 
 
 
