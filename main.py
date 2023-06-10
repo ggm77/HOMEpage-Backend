@@ -1,7 +1,6 @@
 
 # run web page ->  uvicorn main:app --reload        ## main->file name  // app->app name
 
-
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Response
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -20,7 +19,6 @@ import json
 from database import engineconn
 from models import DBtable
 
-
 #--- JWT setting ---#
 # to get a string like this run:
 # openssl rand -hex 32
@@ -31,7 +29,7 @@ secrets = json.loads(open(SECRET_FILE).read())
 
 SECRET_KEY = secrets["server"]["SECRET_KEY"]
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 0.25
 
 
 
@@ -94,7 +92,8 @@ def get_password_hash(password):
 def get_user(db, username: str): #use mysql
     try:
         information = session.query(db).get(username)
-    except:
+    except Exception as e:
+        print(e)
         print(f"[{datetime.utcnow()}] DATABASE DOWN")
         return 
     if information != None: # Is it ok?
@@ -173,6 +172,8 @@ mysql
 homeHomepageDB
 table : userInfo
 
+port=9000
+
 
 mysql -u root -p
 
@@ -227,6 +228,7 @@ async def read_users_me(
     current_user: User = Depends(get_current_active_user)
 ):
     return current_user
+
 
 
 #mysql test
