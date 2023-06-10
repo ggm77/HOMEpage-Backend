@@ -29,7 +29,7 @@ secrets = json.loads(open(SECRET_FILE).read())
 
 SECRET_KEY = secrets["server"]["SECRET_KEY"]
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 0.25
+ACCESS_TOKEN_EXPIRE_MINUTES = 10
 REFRESH_TOKEN_EXPIRE_DAYS = 1
 
 
@@ -102,7 +102,6 @@ def get_user(db, username: str): #use mysql
             "disabled" : information.disabled
             }
         return UserInDB(**user_dict)
-        #return UserInDB(user_dict)
     else:
         return
     
@@ -153,8 +152,6 @@ def authenticate_refresh_token(token: str ):
         exp: str = payload.get("exp")
         if exp is None:
             raise credentials_exception
-        # elif datetime.utcnow() - exp > 0:
-        #     raise credentials_exception
     except JWTError:
         raise credentials_exception
     user = get_user(DBtable, username=username)
@@ -257,7 +254,7 @@ async def response_access_token(
 
     return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
 
-@app.post("/refreshToken")#, response_model=Token)
+@app.post("/refreshToken", response_model=Token)
 async def response_refresh_token(refresh_token: str=Form(...)):
     user = authenticate_refresh_token(refresh_token)
     if not user:
