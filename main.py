@@ -233,6 +233,7 @@ class Item(BaseModel):
 async def response_access_token(
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
+    session.close()
     user = authenticate_user(DBtable, form_data.username, form_data.password)
     if not user:
         raise HTTPException(#raise login failed alert
@@ -251,11 +252,12 @@ async def response_access_token(
     print(f"[{datetime.utcnow()}] \"{form_data.username}\" get access token")
     #print(form_data.username, form_data.password) #for test
     #print(f"[{datetime.utcnow()}]\n",{"access_token": access_token, "token_type": "bearer"}) #for test
-
+    session.close()
     return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
 
 @app.post("/refreshToken", response_model=Token)
 async def response_refresh_token(refresh_token: str=Form(...)):
+    session.close()
     user = authenticate_refresh_token(refresh_token)
     if not user:
         raise HTTPException(#raise login failed alert
@@ -272,7 +274,7 @@ async def response_refresh_token(refresh_token: str=Form(...)):
         data={"sub": user.username}, expires_delta=refresh_token_expires
     )
     print(f"[{datetime.utcnow()}] \"{user.username}\" get access token")
-
+    session.close()
     return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
 
     
@@ -283,23 +285,15 @@ async def response_refresh_token(refresh_token: str=Form(...)):
 async def read_users_me(
     current_user: User = Depends(get_current_active_user)
 ):
+    session.close()
     return current_user #give : username,usertype,disabled
 
 
 @app.post("/changepassword")
 async def changepassword(username: str = Form(...), currentPassword: str = Form(...), newPassword: str = Form(...)):
-    print(currentPassword)
-    print(newPassword)
-
+    session.close()
     if authenticate_user(DBtable, username, currentPassword):
-        #change db password
-        print('start')
-        session.add(session.query(DBtable).filter(DBtable.username == username).update({"hashed_password": get_password_hash(newPassword)}, synchronize_session='auto')).commit()
-        # with Session() as session:
-        #     session.add(some_object)
-        #     session.add(some_other_object)
-        #     session.commit()
-        print("end")
-
-    #change password
+        session.query(DBtable).filter_by(username = username).update({"hashed_password": get_password_hash(newPassword)})
+        session.commit()
+        session.close()
     return
