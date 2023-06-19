@@ -29,7 +29,7 @@ secrets = json.loads(open(SECRET_FILE).read())
 
 SECRET_KEY = secrets["server"]["SECRET_KEY"]
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 1
 
 
@@ -283,12 +283,23 @@ async def response_refresh_token(refresh_token: str=Form(...)):
 async def read_users_me(
     current_user: User = Depends(get_current_active_user)
 ):
-    return current_user
+    return current_user #give : username,usertype,disabled
 
 
+@app.post("/changepassword")
+async def changepassword(username: str = Form(...), currentPassword: str = Form(...), newPassword: str = Form(...)):
+    print(currentPassword)
+    print(newPassword)
 
-#mysql test
-# @app.get("/")
-# async def first_get():
-#     example = session.query(DBtable).get("admin")
-#     return example
+    if authenticate_user(DBtable, username, currentPassword):
+        #change db password
+        print('start')
+        session.add(session.query(DBtable).filter(DBtable.username == username).update({"hashed_password": get_password_hash(newPassword)}, synchronize_session='auto')).commit()
+        # with Session() as session:
+        #     session.add(some_object)
+        #     session.add(some_other_object)
+        #     session.commit()
+        print("end")
+
+    #change password
+    return
