@@ -306,3 +306,14 @@ async def changepassword(username: str = Form(...), currentPassword: str = Form(
     else:
         raise credentials_exception
     return
+
+@app.post("/getmusiclist")
+async def getmusiclist(current_user: User = Depends(get_current_active_user)):
+    pathDir = "./assets/music/"+current_user.username
+    fileList = os.listdir(pathDir)
+    fileList.sort()
+    list = []
+    for i in range(len(fileList)):
+        list.append({"id":i, "data":fileList[i]})
+
+    return {"len":len(fileList),"data":list}
