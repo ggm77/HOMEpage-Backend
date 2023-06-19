@@ -66,7 +66,9 @@ app = FastAPI()
 
 origins = [
     "http://localhost:3000",
-    "localhost:3000"
+    "localhost:3000",
+    "http://raspinas.iptime.org:3000",
+    "raspinas.iptime.org:3000"
 ]
 
 
@@ -292,8 +294,15 @@ async def read_users_me(
 @app.post("/changepassword")
 async def changepassword(username: str = Form(...), currentPassword: str = Form(...), newPassword: str = Form(...)):
     session.close()
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        #headers={"WWW-Authenticate": "Bearer"},
+    )
     if authenticate_user(DBtable, username, currentPassword):
         session.query(DBtable).filter_by(username = username).update({"hashed_password": get_password_hash(newPassword)})
         session.commit()
         session.close()
+    else:
+        raise credentials_exception
     return
