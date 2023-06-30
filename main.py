@@ -1,7 +1,7 @@
 
 # run web page ->  uvicorn main:app --reload        ## main->file name  // app->app name
 
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Response
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Response, Header
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from typing import Annotated, Union
@@ -13,8 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import timedelta, datetime
 from pydantic import BaseModel
 from collections import OrderedDict
+from pathlib import Path
 import os
 import json
+import cv2
 #database
 from database import engineconn
 from models import DBtable
@@ -317,3 +319,51 @@ async def getmusiclist(current_user: User = Depends(get_current_active_user)):
         list.append({"id":i, "data":fileList[i]})
 
     return {"len":len(fileList),"data":list}
+
+@app.post("/getmusicfile")
+async def getmusicfile(current_user: User = Depends(get_current_active_user), musicName: str = Form(...)):
+
+
+    pathDir = "./assets/music/"+current_user.username+"/"+musicName
+    print(pathDir)
+
+    return
+
+@app.post("/getvideolist")
+async def getvideolist(current_user: User = Depends(get_current_active_user)):
+    pathDir = "./assets/video/"+current_user.username
+    fileList = os.listdir(pathDir)
+    fileList.sort()
+    list = []
+    for i in range(len(fileList)):
+        list.append({"id":i, "data":fileList[i]})
+    
+    return {"len":len(fileList),"data":list}
+
+
+@app.get("/getvideofile/{item_id}")
+async def getvideofile(item_id, range: str = Header(None), current_user: User = Depends(get_current_active_user)):
+
+
+    pathDir = "./assets/video/"+current_user.username+"/"+item_id
+    print(pathDir)
+
+    cv2Video = cv2.VideoCapture(pathDir)
+    width = int(cv2Video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cv2Video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    CHUNK_SIZE = width*height
+    video_path = Path(pathDir)
+    start, end = range.replace("bytes=", "").split("-")
+    start = int(start)
+    end = int(end) if end else start + CHUNK_SIZE
+    with open(video_path, "rb") as video:
+        video.seek(start)
+        data = video.read(end - start)
+        filesize = str(video_path.stat().st_size)
+        headers = {
+            'Content-Range': f'bytes {str(start)}-{str(end)}/{filesize}',
+            'Accept-Ranges': 'bytes'
+        }
+        return Response(data, status_code=206, headers=headers, media_type="video/mp4")
+
+
