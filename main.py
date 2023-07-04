@@ -342,11 +342,32 @@ async def getvideolist(current_user: User = Depends(get_current_active_user)):
 
 
 @app.get("/getvideofile/{item_id}")
-async def getvideofile(item_id, range: str = Header(None), current_user: User = Depends(get_current_active_user)):
+async def getvideofile(item_id: str, token: str, range: str = Header(None)):
+
+    print("video file called")
+
+#if changed to yeild, use it. 
+    # temp = int(range.replace("bytes=", "").replace("-",""))
+    # range += str(temp + 1000)
 
 
-    pathDir = "./assets/video/"+current_user.username+"/"+item_id
-    print(pathDir)
+    print(range)
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        #headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise credentials_exception
+
+
+
+    pathDir = "./assets/video/"+payload['sub']+"/"+item_id
+
 
     cv2Video = cv2.VideoCapture(pathDir)
     width = int(cv2Video.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -356,6 +377,9 @@ async def getvideofile(item_id, range: str = Header(None), current_user: User = 
     start, end = range.replace("bytes=", "").split("-")
     start = int(start)
     end = int(end) if end else start + CHUNK_SIZE
+
+#change to yeild
+
     with open(video_path, "rb") as video:
         video.seek(start)
         data = video.read(end - start)
