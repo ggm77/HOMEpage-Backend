@@ -326,6 +326,14 @@ async def getmusicfile(current_user: User = Depends(get_current_active_user), mu
 
     pathDir = "./assets/music/"+current_user.username+"/"+musicName
     print(pathDir)
+    if os.path.isfile(pathDir):
+        print('File exist')
+    else:
+        raise HTTPException(#raise login failed alert
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File dose not exist.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     return
 
